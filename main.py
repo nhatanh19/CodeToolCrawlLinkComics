@@ -1,9 +1,10 @@
-from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.by import By
-from bs4 import BeautifulSoup
 import os
+
+from selenium import webdriver
+import threading
+from selenium.webdriver.common.by import By
+from concurrent.futures import ThreadPoolExecutor
+
 
 # Hàm để lấy các liên kết chương truyện từ trang web
 def get_comic_links(url):
@@ -56,9 +57,9 @@ def get_image_links(comic_links, chapter_number):
     # Đóng trình duyệt sau khi hoàn thành
     driver.quit()
 
-    file_name = f"Chapter {chapter_number}.txt"
+    file_name = os.path.join(folder_name, f"Chapter_{chapter_number}.txt")
     try:
-        # Ghi các URL hình ảnh vào tệp văn bản
+        # Ghi các URL hình ảnh vào tệp văn bản trong thư mục mới
         with open(file_name, 'w') as file:
             for url in image_urls:
                 file.write(url + '\n')
@@ -67,17 +68,32 @@ def get_image_links(comic_links, chapter_number):
         print(f"Error occurred while saving image URLs: {str(e)}")
 
 
+
 # URL của trang web chứa các chương truyện
-comic_url = input("Nhập URL của trang web chứa truyện: ")
-urlSearch = input("Nhập URL tìm kiếm link ảnh: ")
-#comic_url = "https://www.nettruyenbb.com/truyen-tranh/du-bao-khai-huyen-100000"
-#urlSearch = "//i32.ntcdntempv26.com/data/images/"
+#comic_url = input("Nhập URL của trang web chứa truyện: ")
+
+comic_url = "https://www.nettruyenbb.com/truyen-tranh/du-bao-khai-huyen-100000"
+# Tạo tên thư mục mới dựa trên số chương
+folder_name = input("Nhập thư mục muốn lưu file: ")
+# Tạo thư mục mới nếu chưa tồn tại
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+#Lấy list link chapter
 comic_links = get_comic_links(comic_url)
 
-if comic_links:
+# Hàm để chạy các luồng
+def run_threads(links):
     chapter_number = 1
-    for link in reversed(comic_links):
-        get_image_links(link, chapter_number)
-        chapter_number += 1
+    # Giới hạn số luồng đồng thời là 5
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        # Lặp qua các liên kết và thực hiện trong các luồng
+        for link in reversed(links):
+            executor.submit(get_image_links, link, chapter_number)
+            chapter_number += 1
+
+# Kiểm tra xem có liên kết truyện không
+if comic_links:
+    run_threads(comic_links)
 else:
     print("Không tìm thấy liên kết truyện trên trang web.")
